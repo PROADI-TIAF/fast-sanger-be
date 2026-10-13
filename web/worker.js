@@ -5,10 +5,15 @@
  *               {type: "done", summary, zip, figures} | {type: "error", message}
  */
 const PYODIDE_VERSION = "314.0.7";
-const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
 const DISPLAYABLE = /\.(png|svg)$/i;
 
-importScripts(PYODIDE_URL + "pyodide.js");
+// Pyodide is served from the site itself (web/pyodide/, written by build.py), so the page
+// works on networks that block CDNs. A copy without it falls back to the jsDelivr CDN.
+// Pyodide only runs in module workers: index.html starts this file with {type: "module"}.
+const PYODIDE_SOURCES = [
+  new URL("pyodide/", import.meta.url).href,
+  `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`,
+];
 
 let booting = null;
 
@@ -22,9 +27,23 @@ function pythonMessage(err) {
   return lines[lines.length - 1].replace(/^[\w.]*(Error|Exception): /, "");
 }
 
+async function importPyodide() {
+  let lastError;
+  for (const indexURL of PYODIDE_SOURCES) {
+    try {
+      const { loadPyodide } = await import(indexURL + "pyodide.mjs");
+      return { loadPyodide, indexURL };
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
 async function boot() {
   post("status", { text: "Downloading Python (first visit only)" });
-  const pyodide = await loadPyodide({ indexURL: PYODIDE_URL });
+  const { loadPyodide, indexURL } = await importPyodide();
+  const pyodide = await loadPyodide({ indexURL });
   post("status", { text: "Loading numpy, matplotlib and Biopython" });
   await pyodide.loadPackage(["numpy", "matplotlib", "biopython", "micropip"]);
   post("status", { text: "Installing Fast-Sanger-BE" });

@@ -588,7 +588,7 @@ function createWorkerEngine() {
   function start() {
     if (ready) return ready;
     setEngine("loading", "Preparing the analysis engine: starting");
-    worker = new Worker("worker.js");
+    worker = new Worker("worker.js", { type: "module" });
     ready = new Promise((resolve, reject) => {
       const onMessage = (e) => {
         const d = e.data;

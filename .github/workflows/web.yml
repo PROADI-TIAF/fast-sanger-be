@@ -1,6 +1,6 @@
 name: Web version
 
-# Publishes web/ to GitHub Pages. In the repository settings, set Pages > Source to "GitHub Actions".
+# Publishes web/ (with its own copy of Pyodide) to GitHub Pages. In the repository settings, set Pages > Source to "GitHub Actions".
 on:
   push:
     branches: [main]
@@ -28,6 +28,7 @@ jobs:
           python-version: "3.11"
       - run: python -m pip install .
       - run: python web/build.py
+      - run: test -f web/pyodide/pyodide-lock.json  # the site must not depend on the CDN
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

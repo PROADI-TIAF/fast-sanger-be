@@ -6,3 +6,4 @@ dist/
 Final_Results*/
 web/wheels/
 web/examples/
+web/pyodide/

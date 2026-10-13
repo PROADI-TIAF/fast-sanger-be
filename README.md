@@ -54,9 +54,9 @@ To run the page from your own copy instead (for example, while changing the code
 python web/serve.py
 ```
 
-This builds the page (package wheels and an example dataset) and opens it at <http://localhost:8000>. The first analysis downloads Pyodide and the scientific libraries (about 30 MB, then cached by the browser), so an internet connection is needed once.
+This builds the page (package wheels, an example dataset and a copy of Pyodide with the scientific libraries) and opens it at <http://localhost:8000>. The first analysis loads Pyodide and the libraries into the browser (about 30 MB, then cached).
 
-To publish it, push the repository to GitHub and set *Settings > Pages > Source* to *GitHub Actions*; the workflow in `.github/workflows/web.yml` builds and deploys `web/` on every push to `main`. Pyodide is loaded from the jsDelivr CDN, pinned to version 314.0.7 in `web/worker.js`.
+To publish it, push the repository to GitHub and set *Settings > Pages > Source* to *GitHub Actions*; the workflow in `.github/workflows/web.yml` builds and deploys `web/` on every push to `main`. `web/build.py` copies Pyodide (version pinned in `web/worker.js`) and only the packages the analysis needs into `web/pyodide/`, so the site loads everything from its own address and works on networks that block CDNs; a copy built with `--no-pyodide` loads Pyodide from the jsDelivr CDN instead.
 
 ## Inputs
 
