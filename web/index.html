@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fast-Sanger-BE</title>
+<meta name="description" content="Quantify adenine (ABE) and cytosine (CBE) base editing from Sanger .ab1 files, entirely in your browser.">
+<style>
+/* Layout: one working column of numbered steps (files, guides, settings, run, results), like a lab protocol. */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --sunk: #f8f9fb;
+  --fg: #1a1e24;
+  --muted: #5a626d;
+  --line: #dce1e7;
+  --accent: #1f5fbf;
+  --accent-soft: #e8f0fc;
+  --on-accent: #ffffff;
+  --ok: #1a7f46;
+  --ok-soft: #e4f4ea;
+  --warn: #9a5b00;
+  --warn-soft: #fbf1e2;
+  --bad: #b8322a;
+  --bad-soft: #fbe9e7;
+  --heat: #1f3f8f;
+  --on-heat: #ffffff;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101317; --surface: #171b21; --sunk: #12161b; --fg: #e5e8ed; --muted: #9aa3ae; --line: #2a3039;
+    --accent: #86b4ff; --accent-soft: #16233a; --on-accent: #0d1117;
+    --ok: #6fd39a; --ok-soft: #12291c; --warn: #e3a955; --warn-soft: #2a2114; --bad: #f08a80; --bad-soft: #2d1614;
+    --heat: #86b4ff; --on-heat: #0d1117;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101317; --surface: #171b21; --sunk: #12161b; --fg: #e5e8ed; --muted: #9aa3ae; --line: #2a3039;
+  --accent: #86b4ff; --accent-soft: #16233a; --on-accent: #0d1117;
+  --ok: #6fd39a; --ok-soft: #12291c; --warn: #e3a955; --warn-soft: #2a2114; --bad: #f08a80; --bad-soft: #2d1614;
+  --heat: #86b4ff; --on-heat: #0d1117;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 60px; display: grid; gap: 18px; }
+@media (min-width: 720px) { .wrap { padding-inline: 28px; } }
+h1, h2, h3 { font-weight: 650; margin: 0; text-wrap: balance; letter-spacing: -0.005em; }
+h2 { font-size: 20px; }
+h3 { font-size: 16.5px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+header.top { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; justify-content: space-between; padding-block: 8px 4px; }
+.brand { display: flex; gap: 18px; align-items: center; min-width: 0; }
+.sneaker { margin: 0; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.15; color: var(--accent); white-space: pre; }
+.brand h1 { font-size: 28px; line-height: 1.05; }
+.brand p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.privacy { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ok); background: var(--ok-soft); border-radius: 999px; padding: 6px 12px; }
+.privacy svg { flex: none; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; justify-content: space-between; }
+.card-head .title { display: flex; align-items: center; gap: 10px; }
+.step-n { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 999px; background: var(--fg); color: var(--bg); font-size: 13px; font-weight: 600; flex: none; }
+.hint { color: var(--muted); font-size: 13.5px; margin: 0; }
+
+.drop { border: 1.5px dashed var(--line); border-radius: 8px; padding: 18px; text-align: center; color: var(--muted); background: var(--sunk); display: grid; gap: 6px; justify-items: center; cursor: pointer; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); color: var(--fg); }
+.drop strong { color: var(--fg); font-weight: 550; }
+.linkish { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 6px 12px; cursor: pointer; font-size: 13.5px; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; padding: 10px 18px; font-size: 15px; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.small { padding: 2px 8px; font-size: 12px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+tbody tr:last-child td { border-bottom: 0; }
+th { font-size: 12px; font-weight: 600; color: var(--muted); background: var(--sunk); letter-spacing: 0.02em; }
+th .btn { margin-left: 6px; }
+td input[type=text] { width: 100%; min-width: 90px; border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; background: var(--surface); }
+td input.seq { min-width: 260px; font-family: var(--font-mono); letter-spacing: 0.04em; }
+td input.bad { border-color: var(--bad); background: var(--bad-soft); }
+td select { border: 1px solid var(--line); border-radius: 5px; padding: 3px 4px; background: var(--surface); }
+td.file { font-family: var(--font-mono); font-size: 12.5px; }
+.num { font-variant-numeric: tabular-nums; }
+.empty-row td { text-align: center; color: var(--muted); padding: 16px; white-space: normal; }
+
+.pill { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 550; white-space: nowrap; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+.pill.mute { background: var(--sunk); color: var(--muted); border: 1px solid var(--line); }
+.status-text { font-size: 12.5px; color: var(--muted); white-space: normal; min-width: 180px; }
+.status-text code { color: var(--fg); }
+
+details.settings summary { cursor: pointer; font-weight: 550; display: flex; align-items: center; gap: 10px; }
+.grid-settings { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px 18px; margin-top: 14px; }
+.field { display: grid; gap: 4px; font-size: 13px; }
+.field span { color: var(--muted); }
+.field input, .field select { border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: var(--surface); width: 100%; }
+.field.check { grid-template-columns: auto 1fr; align-items: start; gap: 8px; }
+.field.check input { width: auto; margin-top: 3px; }
+
+.runbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
+.runbar .summary { color: var(--muted); font-size: 14px; }
+.blocker { color: var(--bad); font-size: 13.5px; }
+.engine { font-size: 13px; color: var(--muted); display: inline-flex; gap: 8px; align-items: center; }
+.engine .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--line); flex: none; }
+.engine.loading .dot { background: var(--warn); }
+.engine.ready .dot { background: var(--ok); }
+.engine.failed .dot { background: var(--bad); }
+.engine.failed { color: var(--bad); }
+.progress { height: 6px; background: var(--sunk); border-radius: 999px; overflow: hidden; border: 1px solid var(--line); }
+.progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.25s; }
+.log { margin: 0; background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; max-height: 240px; overflow: auto; white-space: pre-wrap; }
+.log .w { color: var(--warn); }
+.log .e { color: var(--bad); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.tab { border: 0; background: none; padding: 8px 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--muted); font-weight: 550; }
+.tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.tab:disabled { cursor: not-allowed; opacity: 0.5; }
+.guide-block { display: grid; gap: 14px; padding-top: 6px; }
+.guide-block + .guide-block { border-top: 1px solid var(--line); padding-top: 20px; margin-top: 6px; }
+.guide-head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
+.guide-head .seq { font-family: var(--font-mono); font-size: 13px; color: var(--muted); letter-spacing: 0.04em; }
+td.heat { text-align: center; font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 12.5px; min-width: 54px; }
+td.empty { color: var(--muted); text-align: center; }
+th.pos { text-align: center; font-family: var(--font-mono); }
+td.notes { white-space: normal; min-width: 220px; color: var(--muted); font-size: 12.5px; }
+
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.thumb { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); padding: 0; cursor: zoom-in; display: grid; text-align: left; min-width: 0; }
+.thumb:disabled { cursor: default; }
+.thumb img { width: 100%; height: 120px; object-fit: cover; object-position: left center; background: #ffffff; display: block; }
+.thumb .noimg { height: 120px; display: grid; place-items: center; background: var(--sunk); color: var(--muted); font-size: 12.5px; padding: 8px; text-align: center; }
+.thumb .cap { padding: 8px 10px; display: grid; gap: 4px; font-size: 12.5px; }
+.thumb .cap .name { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.figure-wide { border: 1px solid var(--line); border-radius: 8px; background: #ffffff; padding: 8px; overflow-x: auto; }
+.figure-wide img { display: block; min-width: 640px; width: 100%; }
+
+.download { display: grid; grid-template-columns: 1fr; gap: 16px; }
+@media (min-width: 760px) { .download { grid-template-columns: auto 1fr; align-items: start; } }
+.tree { margin: 0; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.7; background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; overflow-x: auto; }
+.tree .d { color: var(--accent); }
+.error-box { background: var(--bad-soft); color: var(--bad); border-radius: 8px; padding: 10px 14px; font-size: 13.5px; white-space: pre-wrap; }
+
+footer { color: var(--muted); font-size: 13px; display: grid; gap: 6px; padding-top: 8px; }
+footer p { margin: 0; max-width: 90ch; }
+footer a { color: var(--accent); }
+
+dialog { border: 0; padding: 0; border-radius: 10px; max-width: min(1200px, 96vw); width: 96vw; background: var(--surface); color: var(--fg); }
+dialog::backdrop { background: rgba(10, 12, 16, 0.6); }
+dialog .dlg-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+dialog .dlg-body { padding: 10px; overflow: auto; max-height: 82vh; background: #ffffff; }
+dialog img { display: block; width: 100%; min-width: 700px; }
+@media (prefers-reduced-motion: reduce) { .progress i { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <pre class="sneaker" aria-hidden="true"> _    _
+(_\__/(,_
+| \  _////-._
+L_/__  => __/ \
+|=====;__/___./
+'-'-'-''''''''</pre>
+      <div>
+        <h1>Fast-Sanger-BE</h1>
+        <p>Base editing from Sanger .ab1 files<span id="version"></span></p>
+      </div>
+    </div>
+    <span class="privacy">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      Runs in your browser. Files are never uploaded.
+    </span>
+  </header>
+
+  <!-- 1. Files -->
+  <section class="card" id="files">
+    <div class="card-head">
+      <div class="title"><span class="step-n">1</span><h2>Chromatograms</h2></div>
+      <div class="btns">
+        <span class="hint">Name pattern: <code>Sample_Guide[_Guide2]_ABE|CBE_F|R.ab1</code></span>
+        <button class="btn" id="example-btn">Try example data</button>
+      </div>
+    </div>
+    <label class="drop" id="drop" for="file-input">
+      <strong>Drop .ab1 files here</strong>
+      <span>or <span class="linkish">choose files</span> from your computer. A guides.txt dropped here is loaded into step 2.</span>
+      <input type="file" id="file-input" accept=".ab1,.txt,.fa,.fasta" multiple hidden>
+    </label>
+    <p class="hint" id="files-hint"></p>
+    <div class="table-scroll">
+      <table id="file-table">
+        <thead>
+          <tr>
+            <th>Use</th><th>File</th><th>Sample</th>
+            <th>Guides <button class="btn small" data-fill="guides" title="Copy the first editable row to every editable row">↓ all</button></th>
+            <th>Editor <button class="btn small" data-fill="editor" title="Copy the first editable row to every editable row">↓ all</button></th>
+            <th>Read <button class="btn small" data-fill="read" title="Copy the first editable row to every editable row">↓ all</button></th>
+            <th>Status</th><th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 2. Guides -->
+  <section class="card" id="guides">
+    <div class="card-head">
+      <div class="title"><span class="step-n">2</span><h2>Guides</h2></div>
+      <div class="btns">
+        <button class="btn" id="add-guide">Add guide</button>
+        <label class="btn" for="guide-file">Load guides.txt<input type="file" id="guide-file" accept=".txt,.fa,.fasta" hidden></label>
+        <button class="btn" id="save-guides">Save guides.txt</button>
+      </div>
+    </div>
+    <p class="hint">Protospacer 5'→3' without the PAM, 15–30 nt. Paste two columns from Excel into a name cell to fill several guides at once.</p>
+    <div class="table-scroll">
+      <table id="guide-table">
+        <thead><tr><th>Name</th><th>Sequence</th><th class="num">Length</th><th>Used by</th><th>Status</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="blocker" id="guide-note" hidden></p>
+  </section>
+
+  <!-- 3. Settings -->
+  <section class="card" id="settings">
+    <details class="settings">
+      <summary><span class="step-n">3</span>Settings <span class="hint">· defaults match the command-line version</span></summary>
+      <div class="grid-settings">
+        <label class="field"><span>QC window around the guide (nt)</span><input type="number" id="p-qc_flank" value="10" min="5" max="50"></label>
+        <label class="field"><span>Minimum median Phred</span><input type="number" id="p-min_background_phred" value="20" min="0" max="60"></label>
+        <label class="field"><span>Minimum median peak height (RFU)</span><input type="number" id="p-min_peak_height" value="100" min="0"></label>
+        <label class="field"><span>Overlapping peak ratio</span><input type="number" id="p-mixed_peak_ratio" value="0.25" step="0.01" min="0.05" max="0.9"></label>
+        <label class="field"><span>Noisy neighbourhood limit</span><input type="number" id="p-max_local_mixed_fraction" value="0.35" step="0.01" min="0" max="1"></label>
+        <label class="field"><span>Background region each side (nt)</span><input type="number" id="p-background_flank" value="50" min="20" max="150"></label>
+        <label class="field"><span>F/R difference flagged (pp)</span><input type="number" id="p-discordance_threshold" value="10" min="1" max="100"></label>
+        <label class="field"><span>Figure format</span><select id="p-figure_format"><option>png</option><option>svg</option><option>pdf</option></select></label>
+        <label class="field"><span>Figure resolution (dpi)</span><select id="p-figure_dpi"><option>150</option><option selected>300</option><option>600</option></select></label>
+        <label class="field check"><input type="checkbox" id="p-partial_reads"><span>Keep reads with noisy positions and leave only those positions empty (default: reject the whole read)</span></label>
+      </div>
+    </details>
+  </section>
+
+  <!-- Run -->
+  <section class="card" id="run">
+    <div class="runbar">
+      <button class="btn primary" id="run-btn" disabled>Analyse</button>
+      <span class="summary" id="run-summary"></span>
+      <span class="blocker" id="run-blocker"></span>
+    </div>
+    <span class="engine" id="engine"><i class="dot"></i><span id="engine-text">The analysis engine (about 30 MB, downloaded once) loads when you add files.</span></span>
+    <div class="progress" id="progress" hidden><i></i></div>
+    <pre class="log" id="log" hidden></pre>
+    <div class="error-box" id="run-error" hidden></div>
+  </section>
+
+  <!-- Results -->
+  <section class="card" id="results" hidden>
+    <div class="card-head">
+      <div class="title"><span class="step-n">4</span><h2>Results</h2></div>
+      <div class="chips" id="result-chips"></div>
+    </div>
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div id="guide-results"></div>
+    <h3>Download</h3>
+    <div class="download">
+      <a class="btn primary" id="download-link" download="Final_Results.zip" href="#">Download Final_Results.zip</a>
+      <pre class="tree" id="tree"></pre>
+    </div>
+  </section>
+
+  <footer>
+    <p>Fast-Sanger-BE is an independent implementation. Its background correction follows the principle introduced by BEAT (Xu L, Liu Y, Han R. <i>CRISPR J.</i> 2019;2(4):223–229).</p>
+    <p>The same analysis runs from the command line with <code>fast-sanger-be</code>; both give identical results.</p>
+  </footer>
+</div>
+
+<dialog id="viewer">
+  <div class="dlg-head"><span class="mono" id="viewer-title"></span><button class="btn" id="viewer-close">Close</button></div>
+  <div class="dlg-body"><img id="viewer-img" alt=""></div>
+</dialog>
+
+<script>
+"use strict";
+const EDITORS = ["ABE", "CBE"], READS = ["F", "R"], RESERVED = new Set(["ABE", "CBE", "F", "R"]);
+const READ_WORDS = { F: "F", FW: "F", FWD: "F", FOR: "F", FORWARD: "F", R: "R", RV: "R", REV: "R", REVERSE: "R" };
+const NAME_RE = /^[A-Za-z0-9-]+$/;
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const splitGuides = (text) => (text || "").split(/[,;+\s]+/).filter(Boolean);
+
+let guides = [];
+let files = []; // {name, file, conforming, use, sample, guides, editor, read}
+let running = false;
+let objectUrls = [];
+
+// ------------------------------------------------------------------ names
+
+function checkName(v, what) {
+  if (!v) return `${what} is empty`;
+  if (!NAME_RE.test(v)) return `${what} '${v}' may only use letters, digits and hyphens`;
+  if (RESERVED.has(v.toUpperCase())) return `${what} '${v}' is a reserved word`;
+  return null;
+}
+function parseFilename(name) {
+  const parts = name.replace(/\.ab1$/i, "").split("_");
+  if (parts.length < 4) return null;
+  const sample = parts[0], gs = parts.slice(1, -2), editor = parts.at(-2).toUpperCase(), read = parts.at(-1).toUpperCase();
+  if (!EDITORS.includes(editor) || !READS.includes(read)) return null;
+  if (checkName(sample, "s") || gs.some((g) => checkName(g, "g")) || new Set(gs).size !== gs.length) return null;
+  return { sample, guides: gs.join(", "), editor, read };
+}
+function guessFields(name) {
+  const known = new Map(guides.filter((g) => g.name).map((g) => [g.name.toLowerCase(), g.name]));
+  const found = { guides: [], editor: "", read: "" }, rest = [];
+  const classify = (w) => {
+    const u = w.toUpperCase();
+    if (EDITORS.includes(u)) found.editor = u;
+    else if (READ_WORDS[u]) found.read = READ_WORDS[u];
+    else if (known.has(w.toLowerCase())) found.guides.push(known.get(w.toLowerCase()));
+    else return false;
+    return true;
+  };
+  for (const tok of name.replace(/\.ab1$/i, "").split(/[_\s.]+/).filter(Boolean)) {
+    if (classify(tok)) continue;
+    const parts = tok.split("-");
+    while (parts.length > 1 && classify(parts.at(-1))) parts.pop();
+    rest.push(parts.join("-"));
+  }
+  return { sample: rest[0] || "", guides: [...new Set(found.guides)].join(", "), editor: found.editor, read: found.read };
+}
+function rowErrors(f) {
+  const errs = [], gs = splitGuides(f.guides);
+  const e1 = checkName(f.sample, "sample"); if (e1) errs.push(e1);
+  if (!gs.length) errs.push("add a guide");
+  gs.forEach((g) => { const e = checkName(g, "guide"); if (e) errs.push(e); });
+  if (new Set(gs).size !== gs.length) errs.push("the same guide is listed twice");
+  if (!EDITORS.includes(f.editor)) errs.push("choose ABE or CBE");
+  if (!READS.includes(f.read)) errs.push("choose F or R");
+  return { errs, gs };
+}
+const analysedName = (f) => `${f.sample}_${splitGuides(f.guides).join("_")}_${f.editor}_${f.read}.ab1`;
+
+function duplicates() {
+  const seen = new Map(), dups = new Set();
+  files.filter((f) => f.use && !rowErrors(f).errs.length).forEach((f) => {
+    for (const g of splitGuides(f.guides)) {
+      const key = `${f.editor}/${g}/${f.sample}/${f.read}`;
+      if (seen.has(key)) { dups.add(f.name); dups.add(seen.get(key)); } else seen.set(key, f.name);
+    }
+  });
+  return dups;
+}
+
+// ------------------------------------------------------------------ files
+
+function addFiles(list) {
+  const ab1 = [], texts = [];
+  for (const file of list) (/\.ab1$/i.test(file.name) ? ab1 : /\.(txt|fa|fasta)$/i.test(file.name) ? texts : []).push(file);
+  const loadGuidesFirst = texts.length ? loadGuideFile(texts[0]) : Promise.resolve();
+  return loadGuidesFirst.then(() => {
+    for (const file of ab1) {
+      if (files.some((f) => f.name === file.name)) continue;
+      const parsed = parseFilename(file.name);
+      files.push({ name: file.name, file, conforming: !!parsed, use: true, ...(parsed || guessFields(file.name)) });
+    }
+    if (files.length) engine.start().catch(() => {}); // failures are shown in the engine status line
+    renderFiles();
+  });
+}
+function renderFiles() {
+  const tb = $("#file-table tbody");
+  const dups = duplicates();
+  if (!files.length) {
+    tb.innerHTML = `<tr class="empty-row"><td colspan="8">No files yet. Drop .ab1 files above or try the example data.</td></tr>`;
+  } else {
+    tb.innerHTML = files.map((f, i) => {
+      const { errs } = rowErrors(f);
+      let status;
+      if (!f.use) status = `<span class="pill mute">Skipped</span>`;
+      else if (errs.length) status = `<span class="pill bad">Needs info</span><div class="status-text">${esc(errs.join("; "))}</div>`;
+      else if (dups.has(f.name)) status = `<span class="pill bad">Duplicate</span><div class="status-text">another file gives the same read of this sample</div>`;
+      else if (f.conforming) status = `<span class="pill ok">Named correctly</span>`;
+      else status = `<span class="pill ok">Ready</span><div class="status-text">analysed as <code>${esc(analysedName(f))}</code></div>`;
+      const ro = f.conforming;
+      const input = (key) => ro ? `<span class="mono">${esc(f[key])}</span>`
+        : `<input type="text" id="f-${i}-${key}" data-i="${i}" data-k="${key}" value="${esc(f[key])}" class="${f.use && (key === "sample" ? checkName(f.sample, "s") : !f.guides) ? "bad" : ""}" aria-label="${key} for ${esc(f.name)}" ${running ? "disabled" : ""}>`;
+      const select = (key, opts) => ro ? `<span class="mono">${esc(f[key])}</span>`
+        : `<select id="f-${i}-${key}" data-i="${i}" data-k="${key}" aria-label="${key} for ${esc(f.name)}" ${running ? "disabled" : ""}><option value=""></option>${opts.map((o) => `<option${f[key] === o ? " selected" : ""}>${o}</option>`).join("")}</select>`;
+      return `<tr>
+        <td><input type="checkbox" id="f-${i}-use" data-i="${i}" data-k="use" ${f.use ? "checked" : ""} aria-label="Use ${esc(f.name)}" ${running ? "disabled" : ""}></td>
+        <td class="file">${esc(f.name)}</td>
+        <td>${input("sample")}</td><td>${input("guides")}</td>
+        <td>${select("editor", EDITORS)}</td><td>${select("read", READS)}</td>
+        <td>${status}</td>
+        <td><button class="btn small" data-remove="${i}" aria-label="Remove ${esc(f.name)}" ${running ? "disabled" : ""}>Remove</button></td></tr>`;
+    }).join("");
+  }
+  const needing = files.filter((f) => !f.conforming).length;
+  $("#files-hint").textContent = files.length
+    ? `${files.length} file(s). ` + (needing
+      ? `${needing} do not follow the name pattern: fill in their details below. Your files are not renamed; the new names are used in the results.`
+      : "All names follow the pattern.")
+    : "";
+  renderGuides();
+  renderRunbar();
+}
+$("#file-table").addEventListener("input", (e) => {
+  const t = e.target, i = +t.dataset.i, k = t.dataset.k;
+  if (!k || isNaN(i)) return;
+  files[i][k] = k === "use" ? t.checked : t.value.trim();
+  if (t.type === "text") { renderGuides(); renderRunbar(); } else renderFiles();
+});
+$("#file-table").addEventListener("change", (e) => { if (e.target.dataset.k) renderFiles(); });
+$("#file-table").addEventListener("click", (e) => {
+  const fill = e.target.dataset?.fill;
+  if (fill) {
+    const first = files.find((f) => !f.conforming);
+    if (first) files.forEach((f) => { if (!f.conforming) f[fill] = first[fill]; });
+    renderFiles();
+  }
+  const rm = e.target.dataset?.remove;
+  if (rm !== undefined) { files.splice(+rm, 1); renderFiles(); }
+});
+const drop = $("#drop");
+["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => { if (!running) addFiles([...e.dataTransfer.files]); });
+$("#file-input").addEventListener("change", (e) => { addFiles([...e.target.files]); e.target.value = ""; });
+$("#example-btn").addEventListener("click", async () => {
+  const btn = $("#example-btn"); btn.disabled = true;
+  try {
+    const manifest = await (await fetch("examples/manifest.json")).json();
+    const list = await Promise.all(manifest.files.map(async (name) =>
+      new File([await (await fetch("examples/" + name)).blob()], name)));
+    await addFiles(list);
+  } catch (err) {
+    showError(`Could not load the example data (${err.message}).`);
+  } finally { btn.disabled = false; }
+});
+
+// ------------------------------------------------------------------ guides
+
+function guideErrors(g, i) {
+  const errs = [], e = checkName(g.name, "name"); if (e) errs.push(e);
+  if (g.name && guides.some((o, j) => j !== i && o.name.toLowerCase() === g.name.toLowerCase())) errs.push("defined twice");
+  if (!g.seq) errs.push("add the sequence");
+  else if (!/^[ACGT]+$/.test(g.seq)) errs.push("use only A, C, G, T");
+  else if (g.seq.length < 15 || g.seq.length > 30) errs.push("15–30 nt");
+  return errs;
+}
+function usedGuides() {
+  const used = new Map();
+  files.filter((f) => f.use).forEach((f) => splitGuides(f.guides).forEach((g) => used.set(g, (used.get(g) || 0) + 1)));
+  return used;
+}
+function parseGuideText(text) {
+  const out = []; let cur = null;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim(); if (!line || line.startsWith("#")) continue;
+    const head = line.startsWith(">") ? line.slice(1) : (line.startsWith("[") && line.endsWith("]") ? line.slice(1, -1) : null);
+    if (head !== null) { cur = { name: head.trim(), seq: "" }; out.push(cur); }
+    else if (cur) cur.seq += line.toUpperCase().replace(/\s+/g, "");
+  }
+  return out;
+}
+async function loadGuideFile(file) {
+  const parsed = parseGuideText(await file.text());
+  if (parsed.length) guides = parsed;
+  files.forEach((f) => { if (!f.conforming && !f.guides) f.guides = guessFields(f.name).guides; });
+  renderFiles();
+}
+function renderGuides() {
+  const used = usedGuides();
+  const focused = document.activeElement?.id;
+  // Guides named by the files but not defined yet get an empty row to fill in.
+  for (const name of used.keys()) if (!guides.some((g) => g.name === name) && !checkName(name, "n")) guides.push({ name, seq: "" });
+  $("#guide-table tbody").innerHTML = guides.length ? guides.map((g, i) => {
+    const errs = guideErrors(g, i), n = used.get(g.name) || 0;
+    return `<tr>
+      <td><input type="text" id="g-${i}-name" data-g="${i}" data-k="name" value="${esc(g.name)}" class="${checkName(g.name, "n") ? "bad" : ""}" aria-label="Guide name" ${running ? "disabled" : ""}></td>
+      <td><input type="text" id="g-${i}-seq" data-g="${i}" data-k="seq" value="${esc(g.seq)}" class="seq ${errs.some((x) => /sequence|A, C|nt/.test(x)) ? "bad" : ""}" aria-label="Sequence of ${esc(g.name)}" ${running ? "disabled" : ""}></td>
+      <td class="num">${g.seq.length || ""}</td>
+      <td>${n ? `${n} file${n > 1 ? "s" : ""}` : `<span class="hint">none</span>`}</td>
+      <td>${errs.length ? `<span class="pill bad">${esc(errs.join("; "))}</span>` : `<span class="pill ok">OK</span>`}</td>
+      <td><button class="btn small" data-del="${i}" aria-label="Remove guide" ${running ? "disabled" : ""}>Remove</button></td></tr>`;
+  }).join("") : `<tr class="empty-row"><td colspan="6">No guides yet. Add one, load a guides.txt, or add files whose names include the guide.</td></tr>`;
+  if (focused && document.getElementById(focused)) {
+    const el = document.getElementById(focused); el.focus();
+    if (el.setSelectionRange) el.setSelectionRange(el.value.length, el.value.length);
+  }
+  $("#guide-note").hidden = true;
+}
+$("#guide-table").addEventListener("input", (e) => {
+  const t = e.target, i = +t.dataset.g, k = t.dataset.k; if (isNaN(i)) return;
+  guides[i][k] = k === "seq" ? t.value.toUpperCase().replace(/\s+/g, "") : t.value.trim();
+  renderGuides(); renderRunbar();
+});
+$("#guide-table").addEventListener("paste", (e) => {
+  const t = e.target, i = +t.dataset.g; if (isNaN(i) || t.dataset.k !== "name") return;
+  const text = e.clipboardData.getData("text");
+  if (!text.includes("\t")) return;
+  e.preventDefault();
+  const rows = text.trim().split(/\r?\n/).map((r) => r.split("\t")).filter((r) => r.length >= 2);
+  guides.splice(i, 1, ...rows.map(([n, s]) => ({ name: n.trim(), seq: s.trim().toUpperCase().replace(/\s+/g, "") })));
+  renderGuides(); renderRunbar();
+});
+$("#guide-table").addEventListener("click", (e) => {
+  const i = e.target.dataset?.del; if (i === undefined) return;
+  guides.splice(+i, 1); renderGuides(); renderRunbar();
+});
+$("#add-guide").addEventListener("click", () => { guides.push({ name: "", seq: "" }); renderGuides(); $(`#g-${guides.length - 1}-name`).focus(); });
+$("#guide-file").addEventListener("change", async (e) => { if (e.target.files[0]) await loadGuideFile(e.target.files[0]); e.target.value = ""; });
+const guidesText = () => guides.filter((g) => g.name).map((g) => `>${g.name}\n${g.seq}\n`).join("");
+$("#save-guides").addEventListener("click", () => {
+  const note = $("#guide-note");
+  if (!guides.some((g) => g.name)) { note.hidden = false; note.textContent = "There are no guides to save yet."; return; }
+  saveBlob(new Blob([guidesText()], { type: "text/plain" }), "guides.txt");
+});
+function saveBlob(blob, name) {
+  const url = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+// ------------------------------------------------------------------ run
+
+function readiness() {
+  const active = files.filter((f) => f.use);
+  const blockers = [];
+  if (!active.length) blockers.push("Add at least one .ab1 file.");
+  const bad = active.filter((f) => rowErrors(f).errs.length);
+  if (bad.length) blockers.push(`${bad.length} file(s) need details in step 1.`);
+  if (duplicates().size) blockers.push("Two files give the same read of a sample.");
+  const used = usedGuides();
+  const badGuides = guides.filter((g, i) => used.has(g.name) && guideErrors(g, i).length);
+  if (badGuides.length) blockers.push(`Complete the guide${badGuides.length > 1 ? "s" : ""} ${badGuides.map((g) => g.name).join(", ")} in step 2.`);
+  return { active, blockers };
+}
+function renderRunbar() {
+  const { active, blockers } = readiness();
+  const eds = [...new Set(active.map((f) => f.editor).filter(Boolean))];
+  const gs = usedGuides();
+  $("#run-btn").disabled = running || blockers.length > 0;
+  $("#run-btn").textContent = running ? "Analysing…" : `Analyse ${active.length} chromatogram${active.length === 1 ? "" : "s"}`;
+  $("#run-summary").textContent = active.length ? `${gs.size} guide${gs.size === 1 ? "" : "s"} · ${eds.join(" and ") || "editor not set"}` : "";
+  $("#run-blocker").textContent = blockers.join(" ");
+}
+function settings() {
+  const out = {};
+  document.querySelectorAll("[id^='p-']").forEach((el) => {
+    out[el.id.slice(2)] = el.type === "checkbox" ? el.checked : el.value;
+  });
+  return out;
+}
+function setEngine(state, text) {
+  const el = $("#engine");
+  el.className = `engine ${state}`;
+  $("#engine-text").textContent = text;
+}
+function showError(message) {
+  const box = $("#run-error"); box.hidden = false; box.textContent = message;
+}
+
+function createWorkerEngine() {
+  let worker = null, ready = null;
+  function start() {
+    if (ready) return ready;
+    setEngine("loading", "Preparing the analysis engine: starting");
+    worker = new Worker("worker.js");
+    ready = new Promise((resolve, reject) => {
+      const onMessage = (e) => {
+        const d = e.data;
+        if (d.type === "status") setEngine("loading", `Preparing the analysis engine: ${d.text}…`);
+        else if (d.type === "ready") { worker.removeEventListener("message", onMessage); setEngine("ready", `Analysis engine ready (Fast-Sanger-BE ${d.version}).`); resolve(d); }
+        else if (d.type === "error" && d.during === "boot") { worker.removeEventListener("message", onMessage); fail(d.message); }
+      };
+      const fail = (message) => {
+        setEngine("failed", message + " Check your internet connection and reload the page.");
+        ready = null; worker.terminate(); worker = null; reject(new Error(message));
+      };
+      worker.addEventListener("message", onMessage);
+      worker.addEventListener("error", (e) => fail(`Could not start the analysis engine (${e.message || "network error"}).`), { once: true });
+    });
+    worker.postMessage({ type: "init" });
+    return ready;
+  }
+  async function run(payload, onLog) {
+    await start();
+    return new Promise((resolve, reject) => {
+      const onMessage = (e) => {
+        const d = e.data;
+        if (d.type === "log") onLog(d.level, d.text);
+        else if (d.type === "done") {
+          worker.removeEventListener("message", onMessage);
+          const figures = {};
+          for (const [k, v] of Object.entries(d.figures)) figures[k] = new Uint8Array(v);
+          resolve({ summary: d.summary, zip: new Uint8Array(d.zip), figures });
+        } else if (d.type === "error") { worker.removeEventListener("message", onMessage); reject(new Error(d.message)); }
+      };
+      worker.addEventListener("message", onMessage);
+      worker.postMessage({ type: "run", ...payload }, payload.files.map((f) => f.data));
+    });
+  }
+  return { start, run };
+}
+// A test harness may provide its own engine with the same interface.
+const engine = window.FSBE_ENGINE || createWorkerEngine();
+
+$("#run-btn").addEventListener("click", async () => {
+  const { active, blockers } = readiness();
+  if (blockers.length || running) return;
+  running = true;
+  $("#run-error").hidden = true;
+  $("#results").hidden = true;
+  renderFiles();
+  const log = $("#log"), bar = $("#progress");
+  log.hidden = false; bar.hidden = false; log.innerHTML = ""; $("#progress i").style.width = "2%";
+  try {
+    const used = usedGuides();
+    const payload = {
+      files: await Promise.all(active.map(async (f) => ({ name: analysedName(f), data: await f.file.arrayBuffer() }))),
+      guides: guides.filter((g) => used.has(g.name)).map((g) => `>${g.name}\n${g.seq}\n`).join(""),
+      settings: settings(),
+      names: Object.fromEntries(active.map((f) => [analysedName(f), f.name])),
+    };
+    const onLog = (level, text) => {
+      const cls = level === "WARNING" ? "w" : level === "ERROR" ? "e" : "";
+      log.insertAdjacentHTML("beforeend", (cls ? `<span class="${cls}">${esc(text)}</span>` : esc(text)) + "\n");
+      log.scrollTop = log.scrollHeight;
+      const m = /^\[(\d+)\/(\d+)\]/.exec(text);
+      if (m) $("#progress i").style.width = `${Math.round(90 * (+m[1] - 1) / +m[2]) + 5}%`;
+      if (/Step 4\/4/.test(text)) $("#progress i").style.width = "95%";
+    };
+    const result = await engine.run(payload, onLog);
+    $("#progress i").style.width = "100%";
+    renderResults(result);
+    $("#results").hidden = false;
+    $("#results").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  } catch (err) {
+    showError(`The analysis stopped: ${err.message}`);
+  } finally {
+    running = false;
+    renderFiles();
+  }
+});
+
+// ------------------------------------------------------------------ results
+
+const STATUS_PILL = { "OK": "ok", "Low quality": "warn" };
+function heatCell(v, title = "") {
+  if (v === null || v === undefined) return `<td class="empty" title="${esc(title || "no value")}">–</td>`;
+  const p = Math.max(0, Math.min(100, v));
+  const fg = p > 55 ? "var(--on-heat)" : "var(--fg)";
+  return `<td class="heat" style="background: color-mix(in oklab, var(--heat) ${p}%, var(--surface)); color:${fg}">${v.toFixed(1)}</td>`;
+}
+let currentResult = null;
+function renderResults(result) {
+  objectUrls.forEach((u) => URL.revokeObjectURL(u)); objectUrls = [];
+  const urlFor = {};
+  for (const [path, bytes] of Object.entries(result.figures)) {
+    const url = URL.createObjectURL(new Blob([bytes], { type: path.endsWith(".svg") ? "image/svg+xml" : "image/png" }));
+    urlFor[path] = url; objectUrls.push(url);
+  }
+  const zipUrl = URL.createObjectURL(new Blob([result.zip], { type: "application/zip" }));
+  objectUrls.push(zipUrl);
+  $("#download-link").href = zipUrl;
+  currentResult = { ...result, urlFor };
+
+  const s = result.summary;
+  $("#result-chips").innerHTML = Object.entries(s.counts).map(([status, n]) =>
+    `<span class="pill ${STATUS_PILL[status] || "bad"}">${n} ${esc(status === "OK" ? "OK" : status.toLowerCase())}</span>`).join("");
+  const present = EDITORS.filter((e) => s.editors[e]);
+  $("#tabs").innerHTML = EDITORS.map((e) =>
+    `<button class="tab" role="tab" data-editor="${e}" aria-selected="${e === present[0]}" ${s.editors[e] ? "" : `disabled title="No ${e} files in this run"`}>${e}</button>`).join("");
+  showEditor(present[0]);
+  renderTree(s);
+}
+function showEditor(editor) {
+  document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.editor === editor)));
+  const { summary, urlFor } = currentResult;
+  const conversion = editor === "ABE" ? "A→G" : "C→T";
+  $("#guide-results").innerHTML = summary.editors[editor].map((block, bi) => {
+    const rows = block.samples.map((smp) => `<tr><td><b>${esc(smp.sample)}</b></td>
+        <td>${smp.reads_used === "None" ? `<span class="pill bad">none</span>` : esc(smp.reads_used)}</td>
+        ${block.labels.map((l) => heatCell(smp.values[l], smp.reads_used === "None" ? "no valid read" : "not quantified")).join("")}
+        <td class="num">${smp.max_difference === null ? "" : smp.max_difference.toFixed(1)}</td>
+        <td class="notes">${esc(smp.notes.join("; "))}</td></tr>`).join("");
+    const gallery = block.reads.map((r, ri) => {
+      const url = r.figure && urlFor[r.figure];
+      const reason = r.used ? (r.strand === "-" ? "guide on reverse complement" : r.strand === "+" ? "guide on forward strand" : "") : r.reasons.join("; ");
+      return `<button class="thumb" data-block="${bi}" data-read="${ri}" ${url ? "" : "disabled"}>
+        ${url ? `<img src="${url}" alt="Chromatogram of ${esc(r.file)}" loading="lazy">` : `<span class="noimg">${r.figure ? "Figure saved in the zip (" + esc(summary.figure_format.toUpperCase()) + ")" : "No figure: " + esc(r.status.toLowerCase())}</span>`}
+        <span class="cap"><span class="name">${esc(r.file)}</span>
+        ${r.original_file !== r.file ? `<span class="hint">from ${esc(r.original_file)}</span>` : ""}
+        <span><span class="pill ${STATUS_PILL[r.status] || "bad"}">${esc(r.status)}</span> <span class="hint">${esc(reason)}</span></span></span>
+      </button>`;
+    }).join("");
+    const heat = block.heatmap && urlFor[block.heatmap];
+    return `<div class="guide-block">
+      <div class="guide-head"><h3>${esc(block.name)}</h3><span class="seq">5'-${esc(block.sequence)}-3'</span>
+        <span class="hint">% ${block.product} at each ${editor === "ABE" ? "A" : "C"} of the guide (${conversion}), mean of the reads that passed QC</span></div>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Sample</th><th>Reads used</th>${block.labels.map((l) => `<th class="pos">${esc(l)}</th>`).join("")}<th>Max F/R diff. (pp)</th><th>Notes</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      ${heat ? `<details><summary class="hint" style="cursor:pointer">Heatmap figure (as saved in the zip)</summary>
+        <div class="figure-wide" style="margin-top:10px"><img src="${heat}" alt="Heatmap of editing for ${esc(block.name)}"></div></details>` : ""}
+      <h3>Reads</h3><div class="gallery">${gallery}</div></div>`;
+  }).join("");
+}
+$("#tabs").addEventListener("click", (e) => { const ed = e.target.dataset?.editor; if (ed && !e.target.disabled) showEditor(ed); });
+$("#guide-results").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-read]"); if (!b || b.disabled) return;
+  const editor = $(".tab[aria-selected='true']").dataset.editor;
+  const r = currentResult.summary.editors[editor][+b.dataset.block].reads[+b.dataset.read];
+  $("#viewer-title").textContent = r.file;
+  $("#viewer-img").src = currentResult.urlFor[r.figure]; $("#viewer-img").alt = `Chromatogram of ${r.file}`;
+  $("#viewer").showModal();
+});
+$("#viewer-close").addEventListener("click", () => $("#viewer").close());
+$("#viewer").addEventListener("click", (e) => { if (e.target === $("#viewer")) $("#viewer").close(); });
+
+function renderTree(s) {
+  const lines = [`<span class="d">Final_Results/</span>`, `├── run_log.txt`, `├── input_files.tsv      <span class="hint">analysed name ↔ your file</span>`];
+  const eds = EDITORS.filter((e) => s.editors[e]);
+  eds.forEach((ed, k) => {
+    const last = k === eds.length - 1, p = last ? "    " : "│   ";
+    const blocks = s.editors[ed];
+    const used = blocks.flatMap((b) => b.reads).filter((r) => r.used && r.figure).length;
+    const low = blocks.flatMap((b) => b.reads).filter((r) => !r.used && r.figure).length;
+    lines.push(`${last ? "└" : "├"}── <span class="d">${ed}/</span>`,
+      `${p}├── ${ed}_final_results.xlsx   <span class="hint">one value per sample, one sheet per guide</span>`,
+      `${p}├── <span class="d">Heatmaps/</span>              <span class="hint">${blocks.length} heatmap${blocks.length > 1 ? "s" : ""}</span>`,
+      `${p}└── <span class="d">Raw_Data/</span>`,
+      `${p}    ├── ${ed}_raw_results.xlsx <span class="hint">F and R values, QC, base composition</span>`,
+      `${p}    ├── <span class="d">Figures/</span>           <span class="hint">${used} figure${used === 1 ? "" : "s"}, one folder per guide</span>`,
+      `${p}    └── <span class="d">Low_Quality/</span>       <span class="hint">${low} figure${low === 1 ? "" : "s"}</span>`);
+  });
+  $("#tree").innerHTML = lines.join("\n");
+}
+
+renderFiles();
+fetch("wheels/manifest.json").then((r) => r.json()).then((m) => { $("#version").textContent = ` · version ${m.version}`; }).catch(() => {});
+</script>
+</body>
+</html>

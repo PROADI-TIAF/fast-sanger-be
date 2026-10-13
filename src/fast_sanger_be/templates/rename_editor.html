@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fast-Sanger-BE · Rename .ab1 files</title>
+<style>
+  :root { --ink:#1f2328; --muted:#5b6570; --line:#d0d7de; --head:#f3f5f7; --accent:#2e5aac; --bad:#b42318; --good:#1a7f37; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: var(--ink); margin: 0; background: #fff; }
+  main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 60px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  p.lead { color: var(--muted); margin: 0 0 18px; line-height: 1.5; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 980px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 6px 6px; text-align: left; vertical-align: middle; font-size: 13px; }
+  th { background: var(--head); white-space: nowrap; }
+  td.file { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; max-width: 260px; overflow-wrap: anywhere; }
+  td.new { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--accent); overflow-wrap: anywhere; }
+  tr.off td:not(.inc) { opacity: .4; }
+  .cell { display: flex; gap: 4px; align-items: center; }
+  input[type=text], select { width: 100%; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; }
+  .invalid { border-color: var(--bad) !important; background: #fff5f5 !important; }
+  button { font: inherit; border-radius: 6px; border: 1px solid var(--line); background: #fff; padding: 7px 14px; cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.down { padding: 2px 7px; color: var(--muted); font-size: 12px; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+  #msg { margin-top: 14px; padding: 10px 12px; border-radius: 6px; display: none; white-space: pre-line; line-height: 1.5; }
+  #msg.ok { display: block; background: #eaf7ee; color: var(--good); }
+  #msg.err { display: block; background: #fdeceb; color: var(--bad); }
+  .help { margin-top: 26px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+  code { background: var(--head); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Rename .ab1 files</h1>
+  <p class="lead">These files do not follow <code>Sample_Guide[_Guide2...]_ABE|CBE_F|R.ab1</code>.
+    Fill in the fields and the files will be renamed when you continue in the terminal. Fields were pre-filled where the old name allowed a guess; check them.
+    The <b>&darr;</b> button copies a value to every row below.</p>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Current file</th><th>Include</th><th>Sample</th><th>Guide(s), comma-separated</th><th>Editor</th><th>Read</th><th>New name</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  </div>
+  <datalist id="known"></datalist>
+
+  <div class="bar">
+    <button class="primary" onclick="save()">Save rename table</button>
+    <button onclick="download()">Download as TSV</button>
+  </div>
+  <div id="msg"></div>
+
+  <div class="help">
+    <b>After saving</b>, go back to the terminal and type <code>y</code> to rename the files and continue (or <code>n</code> to abort).<br>
+    Uncheck <i>Include</i> for files that should be left untouched and skipped in this run.<br>
+    Sample and guide names: letters, digits and hyphens only (no underscores). A sample analysed with several guides lists all of them, e.g. <code>sg1, sg2</code>.<br>
+    Every rename is logged in <code>rename_log.tsv</code> so it can be undone.
+  </div>
+</main>
+<script>
+const CONFIG = /*__CONFIG__*/null;
+const NAME_RE = /^[A-Za-z0-9-]+$/;
+const RESERVED = ["ABE", "CBE", "F", "R"];
+const FIELDS = ["sample", "guides", "editor", "read"];
+document.getElementById("known").innerHTML = CONFIG.known_guides.map(g => `<option value="${g}">`).join("");
+
+function esc(s) { return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function select(field, options, value) {
+  return `<select data-f="${field}">${options.map(o => `<option${o === value ? " selected" : ""}>${o}</option>`).join("")}</select>`;
+}
+function withDown(inner, field) { return `<div class="cell">${inner}<button class="down" title="Copy down" onclick="copyDown(this,'${field}')">&darr;</button></div>`; }
+function addRow(r) {
+  const tr = document.createElement("tr");
+  tr.dataset.file = r.current_file;
+  tr.innerHTML = `<td class="file">${esc(r.current_file)}</td>
+    <td class="inc"><input type="checkbox" data-f="include" ${r.include ? "checked" : ""}></td>
+    <td>${withDown(`<input type="text" data-f="sample" spellcheck="false" value="${esc(r.sample)}">`, "sample")}</td>
+    <td>${withDown(`<input type="text" data-f="guides" list="known" spellcheck="false" value="${esc(r.guides)}">`, "guides")}</td>
+    <td>${withDown(select("editor", ["", "ABE", "CBE"], r.editor), "editor")}</td>
+    <td>${withDown(select("read", ["", "F", "R"], r.read), "read")}</td>
+    <td class="new"></td>`;
+  tr.querySelectorAll("input, select").forEach(el => el.addEventListener("input", () => { el.classList.remove("invalid"); preview(tr); }));
+  document.getElementById("rows").appendChild(tr);
+  preview(tr);
+}
+function get(tr, f) { const el = tr.querySelector(`[data-f="${f}"]`); return f === "include" ? el.checked : el.value.trim(); }
+function guides(tr) { return get(tr, "guides").split(/[,;+\s]+/).filter(Boolean); }
+function copyDown(btn, field) {
+  const tr = btn.closest("tr");
+  const value = tr.querySelector(`[data-f="${field}"]`).value;
+  let next = tr.nextElementSibling;
+  while (next) { next.querySelector(`[data-f="${field}"]`).value = value; preview(next); next = next.nextElementSibling; }
+}
+function newName(tr) {
+  const g = guides(tr);
+  if (!get(tr, "sample") || !g.length || !get(tr, "editor") || !get(tr, "read")) return "";
+  return `${get(tr, "sample")}_${g.join("_")}_${get(tr, "editor")}_${get(tr, "read")}.ab1`;
+}
+function preview(tr) {
+  tr.classList.toggle("off", !get(tr, "include"));
+  tr.querySelector(".new").textContent = get(tr, "include") ? newName(tr) : "(skipped)";
+}
+function validName(v) { return NAME_RE.test(v) && !RESERVED.includes(v.toUpperCase()); }
+function collect() {
+  const errors = [], lines = [["current_file", "include", "sample", "guides", "editor", "read"].join("\t")];
+  const used = new Map();
+  [...document.getElementById("rows").rows].forEach(tr => {
+    tr.querySelectorAll(".invalid").forEach(el => el.classList.remove("invalid"));
+    const file = tr.dataset.file, include = get(tr, "include");
+    const mark = f => tr.querySelector(`[data-f="${f}"]`).classList.add("invalid");
+    if (include) {
+      const g = guides(tr);
+      if (!validName(get(tr, "sample"))) { errors.push(`${file}: sample name must use letters, digits and hyphens only.`); mark("sample"); }
+      if (!g.length || !g.every(validName) || new Set(g).size !== g.length) { errors.push(`${file}: list one or more distinct guide names (letters, digits, hyphens).`); mark("guides"); }
+      if (!get(tr, "editor")) { errors.push(`${file}: choose ABE or CBE.`); mark("editor"); }
+      if (!get(tr, "read")) { errors.push(`${file}: choose F or R.`); mark("read"); }
+      const name = newName(tr);
+      if (name && used.has(name)) { errors.push(`${file}: new name ${name} is also used for ${used.get(name)}.`); }
+      if (name && CONFIG.existing_names.includes(name)) { errors.push(`${file}: a file named ${name} already exists.`); }
+      if (name) used.set(name, file);
+    }
+    lines.push([file, include ? "yes" : "no", get(tr, "sample"), guides(tr).join(","), get(tr, "editor"), get(tr, "read")].join("\t"));
+  });
+  return { errors, text: lines.join("\n") + "\n" };
+}
+function show(kind, text) { const m = document.getElementById("msg"); m.className = kind; m.textContent = text; }
+async function save() {
+  const { errors, text } = collect();
+  if (errors.length) { show("err", errors.join("\n")); return; }
+  show("ok", "Saving...");
+  try {
+    const res = await fetch(CONFIG.save_url, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: CONFIG.token, content: text }) });
+    const out = await res.json();
+    if (!res.ok) throw new Error(out.error || res.statusText);
+    show("ok", `Saved to ${out.path}\nReturn to the terminal and type y to rename the files and continue.`);
+  } catch (err) {
+    show("err", `Could not save automatically (${err.message}).\nUse "Download as TSV" and move the file next to your .ab1 files as ${CONFIG.target_name}.`);
+  }
+}
+function download() {
+  const { errors, text } = collect();
+  if (errors.length) { show("err", errors.join("\n")); return; }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/tab-separated-values" }));
+  a.download = CONFIG.target_name;
+  a.click();
+}
+CONFIG.rows.forEach(addRow);
+</script>
+</body>
+</html>

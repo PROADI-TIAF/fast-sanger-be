@@ -1,0 +1,12 @@
+name: fast-sanger-be
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - biopython>=1.81
+  - numpy>=1.23
+  - matplotlib-base>=3.7
+  - openpyxl>=3.1
+  - pytest>=7
+  - pip

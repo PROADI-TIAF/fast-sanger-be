@@ -1,0 +1,8 @@
+__pycache__/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+Final_Results*/
+web/wheels/
+web/examples/

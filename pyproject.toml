@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fast-sanger-be"
+version = "1.0.0"
+description = "Batch quantification of adenine and cytosine base editing from Sanger .ab1 files"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "biopython>=1.81",
+    "numpy>=1.23",
+    "matplotlib>=3.7",
+    "openpyxl>=3.1",
+]
+
+[project.urls]
+Homepage = "https://PROADI-TIAF.github.io/fast-sanger-be/"
+Source = "https://github.com/PROADI-TIAF/fast-sanger-be"
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+fast-sanger-be = "fast_sanger_be.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+fast_sanger_be = ["templates/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

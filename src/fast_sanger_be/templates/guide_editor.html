@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fast-Sanger-BE · Guide sequences</title>
+<style>
+  :root { --ink:#1f2328; --muted:#5b6570; --line:#d0d7de; --head:#f3f5f7; --accent:#2e5aac; --bad:#b42318; --good:#1a7f37; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: var(--ink); margin: 0; background: #fff; }
+  main { max-width: 980px; margin: 0 auto; padding: 28px 20px 60px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  p.lead { color: var(--muted); margin: 0 0 18px; line-height: 1.5; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: middle; }
+  th { background: var(--head); font-size: 13px; }
+  td.idx { color: var(--muted); width: 36px; }
+  input[type=text] { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+  input.seq { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .5px; }
+  input.invalid { border-color: var(--bad); background: #fff5f5; }
+  .tag { font-size: 11px; color: var(--accent); background: #eef3fc; border-radius: 10px; padding: 2px 8px; white-space: nowrap; }
+  .len { color: var(--muted); font-size: 12px; width: 60px; }
+  button { font: inherit; border-radius: 6px; border: 1px solid var(--line); background: #fff; padding: 7px 14px; cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.icon { padding: 4px 9px; color: var(--muted); }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+  #msg { margin-top: 14px; padding: 10px 12px; border-radius: 6px; display: none; white-space: pre-line; line-height: 1.5; }
+  #msg.ok { display: block; background: #eaf7ee; color: var(--good); }
+  #msg.err { display: block; background: #fdeceb; color: var(--bad); }
+  .help { margin-top: 26px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+  code { background: var(--head); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Guide sequences</h1>
+  <p class="lead">Enter each guide (protospacer, 5'&rarr;3', <b>without the PAM</b>). Names must match the guide names used in the .ab1 file names.
+    You can paste two columns (name, sequence) straight from Excel.</p>
+
+  <table>
+    <thead><tr><th>#</th><th style="width:28%">Guide name</th><th>Sequence (5'&rarr;3')</th><th>Length</th><th></th><th></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <div class="bar">
+    <button onclick="addRow()">Add row</button>
+    <button class="primary" onclick="save()">Save guides</button>
+    <button onclick="download()">Download as TXT</button>
+  </div>
+  <div id="msg"></div>
+
+  <div class="help">
+    <b>After saving</b>, go back to the terminal and type <code>y</code> to continue (or <code>n</code> to abort).<br>
+    The file is saved as <code id="target"></code> next to your .ab1 files, in this format:<br>
+    <code>&gt;Guide-name</code> on one line and its sequence on the next.<br>
+    Names may contain letters, digits and hyphens (no underscores). Sequences: A, C, G, T only, 15&ndash;30 nt.
+  </div>
+</main>
+<script>
+const CONFIG = /*__CONFIG__*/null;
+const NAME_RE = /^[A-Za-z0-9-]+$/;
+const RESERVED = ["ABE", "CBE", "F", "R"];
+const required = new Set(CONFIG.required);
+document.getElementById("target").textContent = CONFIG.target_name;
+
+function rowHtml(i) {
+  return `<td class="idx">${i + 1}</td>
+    <td><input type="text" class="name" spellcheck="false"></td>
+    <td><input type="text" class="seq" spellcheck="false"></td>
+    <td class="len"></td><td class="req"></td>
+    <td><button class="icon" title="Remove row" onclick="removeRow(this)">&times;</button></td>`;
+}
+function addRow(name = "", seq = "") {
+  const tbody = document.getElementById("rows");
+  const tr = document.createElement("tr");
+  tr.innerHTML = rowHtml(tbody.rows.length);
+  tr.querySelector(".name").value = name;
+  tr.querySelector(".seq").value = seq;
+  tr.querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("input", () => { inp.classList.remove("invalid"); refresh(tr); });
+    inp.addEventListener("paste", onPaste);
+  });
+  tbody.appendChild(tr);
+  refresh(tr);
+  return tr;
+}
+function removeRow(btn) { btn.closest("tr").remove(); renumber(); }
+function renumber() { [...document.getElementById("rows").rows].forEach((tr, i) => tr.cells[0].textContent = i + 1); }
+function refresh(tr) {
+  const name = tr.querySelector(".name").value.trim();
+  const seq = clean(tr.querySelector(".seq").value);
+  tr.querySelector(".len").textContent = seq ? `${seq.length} nt` : "";
+  tr.querySelector(".req").innerHTML = required.has(name) ? '<span class="tag">used in .ab1 names</span>' : "";
+}
+function clean(seq) { return seq.replace(/\s+/g, "").toUpperCase(); }
+function onPaste(e) {
+  const text = (e.clipboardData || window.clipboardData).getData("text");
+  if (!/[\t\n]/.test(text.trim())) return;
+  e.preventDefault();
+  const lines = text.replace(/\r/g, "").split("\n").filter(l => l.trim());
+  let tr = e.target.closest("tr");
+  lines.forEach((line, k) => {
+    const cols = line.split("\t");
+    if (k > 0) tr = tr.nextElementSibling || addRow();
+    tr.querySelector(".name").value = (cols[0] || "").trim();
+    if (cols.length > 1) tr.querySelector(".seq").value = cols[1].trim();
+    refresh(tr);
+  });
+}
+function collect() {
+  const rows = [...document.getElementById("rows").rows];
+  const errors = [], guides = [], seen = new Map();
+  rows.forEach((tr, i) => {
+    const nameEl = tr.querySelector(".name"), seqEl = tr.querySelector(".seq");
+    const name = nameEl.value.trim(), seq = clean(seqEl.value);
+    nameEl.classList.remove("invalid"); seqEl.classList.remove("invalid");
+    if (!name && !seq) return;
+    const before = errors.length;
+    if (!NAME_RE.test(name) || RESERVED.includes(name.toUpperCase())) {
+      errors.push(`Row ${i + 1}: guide name "${name}" may only contain letters, digits and hyphens (not ABE, CBE, F or R).`);
+      nameEl.classList.add("invalid");
+    } else if (seen.has(name.toLowerCase())) {
+      errors.push(`Row ${i + 1}: guide "${name}" is already listed in row ${seen.get(name.toLowerCase())}.`);
+      nameEl.classList.add("invalid");
+    }
+    if (!/^[ACGT]+$/.test(seq)) {
+      errors.push(`Row ${i + 1}: sequence may only contain A, C, G and T.`);
+      seqEl.classList.add("invalid");
+    } else if (seq.length < 15 || seq.length > 30) {
+      errors.push(`Row ${i + 1}: sequence is ${seq.length} nt; expected 15-30 nt (protospacer without PAM).`);
+      seqEl.classList.add("invalid");
+    }
+    seen.set(name.toLowerCase(), i + 1);
+    if (errors.length === before) guides.push([name, seq]);
+  });
+  const named = new Set(guides.map(g => g[0]));
+  const missing = [...required].filter(n => !named.has(n));
+  if (missing.length) errors.push(`Missing sequences for guides used in .ab1 names: ${missing.join(", ")}.`);
+  if (!guides.length) errors.push("Enter at least one guide.");
+  return { errors, text: guides.map(([n, s]) => `>${n}\n${s}\n`).join("") };
+}
+function show(kind, text) { const m = document.getElementById("msg"); m.className = kind; m.textContent = text; }
+async function save() {
+  const { errors, text } = collect();
+  if (errors.length) { show("err", errors.join("\n")); return; }
+  show("ok", "Saving...");
+  try {
+    const res = await fetch(CONFIG.save_url, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: CONFIG.token, content: text }) });
+    const out = await res.json();
+    if (!res.ok) throw new Error(out.error || res.statusText);
+    show("ok", `Saved to ${out.path}\nReturn to the terminal and type y to continue.`);
+  } catch (err) {
+    show("err", `Could not save automatically (${err.message}).\nUse "Download as TXT" and move the file next to your .ab1 files as ${CONFIG.target_name}.`);
+  }
+}
+function download() {
+  const { errors, text } = collect();
+  if (errors.length) { show("err", errors.join("\n")); return; }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+  a.download = CONFIG.target_name;
+  a.click();
+}
+(CONFIG.rows.length ? CONFIG.rows : [["", ""]]).forEach(([n, s]) => addRow(n, s));
+</script>
+</body>
+</html>
